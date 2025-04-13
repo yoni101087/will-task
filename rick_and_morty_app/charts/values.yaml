@@ -1,0 +1,15 @@
+replicaCount: 1
+image:
+  repository: 092988563851.dkr.ecr.us-west-2.amazonaws.com/rick-api
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 9082
+
+
+ingress:
+  enabled: true
+  annotations: {}
+

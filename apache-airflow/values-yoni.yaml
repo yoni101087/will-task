@@ -1,0 +1,75 @@
+executor: CeleryExecutor 
+
+airflow:
+  image:
+    repository: apache/airflow
+    tag: 2.8.1
+
+
+config:
+  core:
+    dags_folder: /opt/airflow/dags
+
+
+
+data:
+  metadataSecretName: airflow-metadata-secret
+
+
+
+postgresql:
+  enabled: false
+
+
+dags:
+  persistence:
+    enabled: true
+    size: 1Gi
+    storageClassName: gp3
+    accessMode: ReadWriteOnce
+    existingClaim: ""
+
+
+logs:                
+  persistence:
+    enabled: false
+
+redis: 
+  persistence:
+    enabled: false
+webserver:
+  extraInitContainers:
+    - name: s3-sync
+      image: amazon/aws-cli:2.15.35
+      command: ["bash", "-c"]
+      args:
+        - |
+          LOG_FILE="/tmp/s3-sync.log"
+          echo "===== S3 SYNC START =====" | tee -a $LOG_FILE
+          echo "===== AWS Identity =====" | tee -a $LOG_FILE
+          aws sts get-caller-identity 2>&1 | tee -a $LOG_FILE 
+          echo "===== Checking S3 Bucket =====" | tee -a $LOG_FILE
+          aws s3 ls s3://my-eks-ingestion-bucket/dags/ 2>&1 | tee -a $LOG_FILE 
+          echo "===== Starting S3 Sync =====" | tee -a $LOG_FILE
+          mkdir -p /opt/airflow/dags
+          aws s3 sync s3://my-eks-ingestion-bucket/dags/ /opt/airflow/dags 2>&1 | tee -a $LOG_FILE
+          echo "===== Listing Synced Files =====" | tee -a $LOG_FILE
+          ls -la /opt/airflow/dags 2>&1 | tee -a $LOG_FILE 
+          echo "===== S3 SYNC DONE =====" | tee -a $LOG_FILE
+      envFrom:
+        - secretRef:
+            name: airflow-s3-creds
+      volumeMounts:
+        - name: airflow-dags
+          mountPath: /opt/airflow/dags
+      securityContext:
+        runAsUser: 0  
+  extraVolumes:
+    - name: airflow-dags
+      persistentVolumeClaim:
+        claimName: airflow-dags  
+
+  extraVolumeMounts:
+    - name: airflow-dags
+      mountPath: /opt/airflow/dags
+
